@@ -1,35 +1,28 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-
 # Load dataset
 df = pd.read_csv("data/creditcard.csv")
-
 
 # 1. Dataset shape
 print("Dataset shape:")
 print(df.shape)
 
-
 # 2. Missing values
 print("\nMissing values:")
 print(df.isnull().sum().sum())
-
 
 # 3. Class distribution
 print("\nClass distribution:")
 print(df["Class"].value_counts())
 
-
 # 4. Class percentages
 print("\nClass percentages:")
 print(df["Class"].value_counts(normalize=True) * 100)
 
-
 # 5. Amount statistics
 print("\nAmount statistics:")
 print(df["Amount"].describe())
-
 
 # 6. Normal vs Fraud amount statistics
 print("\nNormal transaction amount:")
@@ -37,7 +30,6 @@ print(df[df["Class"] == 0]["Amount"].describe())
 
 print("\nFraud transaction amount:")
 print(df[df["Class"] == 1]["Amount"].describe())
-
 
 # 7. Compare transaction amounts
 normal_amounts = df[df["Class"] == 0]["Amount"]
