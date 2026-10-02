@@ -57,10 +57,16 @@ print(classification_report(y_test, y_pred))
 print("\nConfusion Matrix:")
 print(confusion_matrix(y_test, y_pred))
 
-# ROC-AUC
+# |                 | Predicted Normal | Predicted Fraud |
+# | --------------- | ---------------: | --------------: |
+# | Actually Normal |           56,853 |              11 |
+# | Actually Fraud  |               16 |              82 |
+
+
+# ROC-AUC: measures the model's ability to distinguish between classes
 roc_auc = roc_auc_score(y_test, y_prob)
 print("\nROC-AUC:", roc_auc)
 
-# PR-AUC
+# PR-AUC: measures the model's performance in the positive class
 pr_auc = average_precision_score(y_test, y_prob)
 print("PR-AUC:", pr_auc)
