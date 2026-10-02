@@ -43,7 +43,7 @@ explanation = pd.DataFrame({
 # Calculate absolute SHAP value
 explanation["Absolute SHAP"] = explanation["SHAP Value"].abs()
 
-# Sort by strongest contribution
+# Sort by strongest contribution, absolute SHAP value
 explanation = explanation.sort_values(
     "Absolute SHAP",
     ascending=False
