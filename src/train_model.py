@@ -7,6 +7,7 @@ from sklearn.metrics import (
     average_precision_score
 )
 from xgboost import XGBClassifier
+import os
 
 # Load dataset
 df = pd.read_csv("data/creditcard.csv")
@@ -43,7 +44,14 @@ model = XGBClassifier(
 # Train the model
 model.fit(X_train, y_train)
 
+# Create models folder if it doesn't exist
+os.makedirs("models", exist_ok=True)
+
+# Save trained model
+model.save_model("models/fraud_model.json")
+
 print("Model training completed!")
+print("Model saved successfully!")
 
 # Make predictions
 y_pred = model.predict(X_test)
