@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import xgboost as xgb
 from dotenv import load_dotenv
-from database import insert_transaction, insert_prediction
+from .database import insert_transaction, insert_prediction
 
 # Load variables from the .env file.
 load_dotenv()
