@@ -1,8 +1,17 @@
+import os
 import pandas as pd
 import xgboost as xgb
-
+from dotenv import load_dotenv
 from database import insert_transaction, insert_prediction
 
+# Load variables from the .env file.
+load_dotenv()
+
+# Read the fraud threshold from the environment.
+# If it is missing, use 0.5 as a fallback.
+FRAUD_THRESHOLD = float(
+    os.getenv("FRAUD_THRESHOLD", "0.5")
+)
 
 # Load the trained XGBoost model
 model = xgb.XGBClassifier()
@@ -32,8 +41,8 @@ def predict_transaction(transaction):
         transaction_df
     )[0][1]
 
-    # For now, use the 0.5 threshold used by XGBoost's default binary prediction.
-    if fraud_probability >= 0.5:
+    # Compare the model probability with our configurable threshold.
+    if fraud_probability >= FRAUD_THRESHOLD:
         risk_level = "HIGH"
     else:
         risk_level = "LOW"
