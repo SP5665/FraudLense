@@ -1,8 +1,15 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from .predict import predict_transaction
+from .database import (
+    insert_investigation,
+    transaction_exists,
+    update_investigation_decision,
+    insert_audit_log,
+    get_transaction_id_for_investigation
+)
 
-# Create the FastAPI application.
+# Create the FastAPI application and define its metadata.
 app = FastAPI(
     title="FraudLense API",
     description="API for the FraudLense fraud detection system",
@@ -44,6 +51,24 @@ class Transaction(BaseModel):
     V27: float
     V28: float
 
+# Define the structure of an investigation request received by the API.
+class InvestigationRequest(BaseModel):
+
+    # ID of the transaction that needs to be investigated.
+    transaction_id: int
+
+    # We will normally create investigations as OPEN.
+    status: str = "OPEN"
+
+# Define the structure of an investigation decision received by the API.
+class InvestigationDecision(BaseModel):
+
+    # The analyst's final decision.
+    analyst_decision: str
+
+    # Optional notes explaining the decision.
+    analyst_notes: str | None = None
+
 # Health-check endpoint.
 @app.get("/")
 def home():
@@ -54,9 +79,6 @@ def home():
 # Prediction endpoint.
 @app.post("/predict")
 def predict(transaction: Transaction):
-    """
-    Receive a transaction and return the fraud prediction.
-    """
 
     # Convert the Pydantic object into a normal dictionary.
     transaction_data = transaction.model_dump()
@@ -66,3 +88,70 @@ def predict(transaction: Transaction):
 
     # Return the prediction to the API client.
     return result
+
+# Investigation endpoint.
+@app.post("/investigations")
+def create_investigation(request: InvestigationRequest):
+
+    # Check whether the requested transaction exists.
+    if not transaction_exists(request.transaction_id):
+        return {
+            "error": "Transaction not found"
+        }
+
+    # Create the investigation in MySQL.
+    investigation_id = insert_investigation(
+        transaction_id=request.transaction_id,
+        status=request.status
+    )
+
+    # Return information about the newly created investigation.
+    return {
+        "investigation_id": investigation_id,
+        "transaction_id": request.transaction_id,
+        "status": request.status
+    }
+
+# Endpoint for analysts to submit their final decision on an investigation and create an audit log.
+@app.post("/investigations/{investigation_id}/decision")
+def make_investigation_decision(
+    investigation_id: int,
+    decision: InvestigationDecision
+):
+
+    # Find the transaction associated with this investigation.
+    transaction_id = get_transaction_id_for_investigation(
+        investigation_id
+    )
+
+    # If the investigation does not exist, return an error.
+    if transaction_id is None:
+        return {
+            "error": "Investigation not found"
+        }
+
+    # Update the investigation with the analyst's decision
+    update_investigation_decision(
+        investigation_id=investigation_id,
+        analyst_decision=decision.analyst_decision,
+        analyst_notes=decision.analyst_notes
+    )
+
+    # Record the analyst's action in the audit log.
+    insert_audit_log(
+        transaction_id=transaction_id,
+        action="ANALYST_DECISION",
+        details=(
+            f"Investigation {investigation_id} closed with decision "
+            f"{decision.analyst_decision}."
+        )
+    )
+
+    # Return the final investigation information.
+    return {
+        "investigation_id": investigation_id,
+        "transaction_id": transaction_id,
+        "status": "CLOSED",
+        "analyst_decision": decision.analyst_decision,
+        "analyst_notes": decision.analyst_notes
+    }
