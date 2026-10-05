@@ -339,3 +339,27 @@ def get_prediction(transaction_id):
     connection.close()
 
     return prediction
+
+# Retrieve the latest investigation associated with a transaction.
+def get_investigation(transaction_id):
+
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM investigations
+        WHERE transaction_id = %s
+        ORDER BY investigation_id DESC
+        LIMIT 1
+        """,
+        (transaction_id,)
+    )
+
+    investigation = cursor.fetchone()
+
+    cursor.close()
+    connection.close()
+
+    return investigation

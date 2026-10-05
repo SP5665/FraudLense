@@ -9,7 +9,8 @@ from .database import (
     get_transaction_id_for_investigation,
     get_transactions,
     get_transaction,
-    get_prediction
+    get_prediction,
+    get_investigation
 )
 
 # Create the FastAPI application and define its metadata.
@@ -205,3 +206,22 @@ def get_transaction_prediction(transaction_id: int):
 
     # Return the prediction details.
     return prediction
+
+# Endpoint to retrieve the latest investigation associated with a specific transaction.
+@app.get("/transactions/{transaction_id}/investigation")
+def get_transaction_investigation(transaction_id: int):
+
+    if not transaction_exists(transaction_id):
+        return {
+            "error": "Transaction not found"
+        }
+
+    investigation = get_investigation(transaction_id)
+
+    # A transaction may exist without an investigation.
+    if investigation is None:
+        return {
+            "error": "Investigation not found"
+        }
+
+    return investigation
