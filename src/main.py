@@ -8,7 +8,8 @@ from .database import (
     insert_audit_log,
     get_transaction_id_for_investigation,
     get_transactions,
-    get_transaction
+    get_transaction,
+    get_prediction
 )
 
 # Create the FastAPI application and define its metadata.
@@ -183,3 +184,24 @@ def get_single_transaction(transaction_id: int):
         }
 
     return transaction
+
+# Endpoint to retrieve the fraud prediction for a specific transaction.
+@app.get("/transactions/{transaction_id}/prediction")
+def get_transaction_prediction(transaction_id: int):
+
+    # Check whether the transaction exists.
+    if not transaction_exists(transaction_id):
+        return {
+            "error": "Transaction not found"
+        }
+
+    # Get the latest prediction for this transaction.
+    prediction = get_prediction(transaction_id)
+
+    if prediction is None:
+        return {
+            "error": "Prediction not found"
+        }
+
+    # Return the prediction details.
+    return prediction

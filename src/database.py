@@ -240,7 +240,6 @@ def transaction_exists(transaction_id):
 
     # Execute the query with the provided transaction_id.
     cursor.execute(query, (transaction_id,))
-
     # Get the first matching row, if one exists.
     result = cursor.fetchone()
 
@@ -277,7 +276,8 @@ def get_transaction_id_for_investigation(investigation_id):
 def get_transactions():
 
     connection = get_connection()
-    cursor = connection.cursor(dictionary=True) # Use dictionary=True to get results as dictionaries
+    # Use a dictionary cursor so the result has column names.
+    cursor = connection.cursor(dictionary=True)
 
     query = """
     SELECT *
@@ -314,3 +314,28 @@ def get_transaction(transaction_id):
     connection.close()
 
     return transaction
+
+# Retrieve the prediction associated with a transaction.
+def get_prediction(transaction_id):
+
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM predictions
+        WHERE transaction_id = %s
+        ORDER BY prediction_id DESC
+        LIMIT 1
+        """,
+        (transaction_id,)
+    )
+
+    # Get the prediction, or None if it does not exist.
+    prediction = cursor.fetchone()
+
+    cursor.close()
+    connection.close()
+
+    return prediction
