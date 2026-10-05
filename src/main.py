@@ -225,3 +225,26 @@ def get_transaction_investigation(transaction_id: int):
         }
 
     return investigation
+
+# Endpoint to retrieve all related details (transaction, prediction, investigation) for a specific transaction.
+@app.get("/transactions/{transaction_id}/details")
+def get_transaction_details(transaction_id: int):
+
+    transaction = get_transaction(transaction_id)
+    if transaction is None:
+        return {
+            "error": "Transaction not found"
+        }
+
+    # Get the latest fraud prediction for this transaction.
+    prediction = get_prediction(transaction_id)
+
+    # Get the latest investigation for this transaction.
+    investigation = get_investigation(transaction_id)
+
+    # Return all related information together.
+    return {
+        "transaction": transaction,
+        "prediction": prediction,
+        "investigation": investigation
+    }
