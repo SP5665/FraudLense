@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from .predict import (
     predict_transaction,
     predict_transaction_batch,
+    explain_transaction,
     FRAUD_THRESHOLD
 )
 from .database import (
@@ -365,4 +366,35 @@ async def predict_batch(file: UploadFile = File(...)):
         "high_risk_transactions": high_risk_count,
         "low_risk_transactions": low_risk_count,
         "flagged_transactions": flagged_transactions
+    }
+
+# Endpoint to generate a SHAP explanation for an existing transaction.
+@app.get("/transactions/{transaction_id}/explanation")
+def get_transaction_explanation(transaction_id: int):
+
+    # Retrieve the transaction from MySQL.
+    transaction = get_transaction(transaction_id)
+
+    # Stop if the transaction does not exist.
+    if transaction is None:
+        return {"error": "Transaction not found"}
+
+    # Convert database values to regular Python floats
+    # so XGBoost and SHAP can process them correctly.
+    transaction_data = {
+        "Time": float(transaction["transaction_time"]),
+        "Amount": float(transaction["amount"]),
+        **{
+            f"V{i}": float(transaction[f"v{i}"])
+            for i in range(1, 29)
+        }
+    }
+
+    # Generate the SHAP explanation.
+    explanation = explain_transaction(transaction_data)
+
+    # Return the top contributing features.
+    return {
+        "transaction_id": transaction_id,
+        "explanation": explanation
     }

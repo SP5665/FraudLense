@@ -123,3 +123,48 @@ def predict_transaction_batch(transaction_df):
 
     # Return the probabilities as a NumPy array.
     return probabilities
+
+# Generate SHAP explanations for a single transaction.
+def explain_transaction(transaction):
+
+    # Convert the transaction dictionary into a DataFrame.
+    transaction_df = pd.DataFrame([transaction])
+
+    # Keep the features in the exact order expected by the model.
+    transaction_df = transaction_df[FEATURE_COLUMNS]
+
+    # Calculate SHAP values for this transaction.
+    shap_values = explainer.shap_values(transaction_df)
+
+    # Get SHAP values for the first (and only) transaction.
+    values = shap_values[0]
+
+    # Create a DataFrame containing each feature and its contribution.
+    explanation_df = pd.DataFrame({
+        "feature": FEATURE_COLUMNS,
+        "shap_value": values
+    })
+
+    # Calculate the absolute contribution so we can find
+    # the features that influenced the prediction the most.
+    explanation_df["absolute_shap"] = (
+        explanation_df["shap_value"].abs()
+    )
+
+    # Sort from strongest contribution to weakest.
+    explanation_df = explanation_df.sort_values(
+        "absolute_shap",
+        ascending=False
+    )
+
+    # Keep only the top 5 contributing features.
+    top_features = explanation_df.head(5)
+
+    # Convert the result into a simple list of dictionaries.
+    return [
+        {
+            "feature": row["feature"],
+            "shap_value": float(row["shap_value"])
+        }
+        for _, row in top_features.iterrows()
+    ]
