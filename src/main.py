@@ -1,5 +1,5 @@
 import pandas as pd
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form
 from pydantic import BaseModel
 from .predict import (
     predict_transaction,
@@ -18,7 +18,9 @@ from .database import (
     get_transactions,
     get_transaction,
     get_prediction,
-    get_investigation
+    get_investigation,
+    get_audit_logs,
+    get_batch_results_by_source_file
 )
 
 # Create the FastAPI application and define its metadata.
@@ -181,19 +183,6 @@ def get_all_transactions():
         "transactions": transactions
     }
 
-# Endpoint to retrieve a single transaction by its ID.
-@app.get("/transactions/{transaction_id}")
-def get_single_transaction(transaction_id: int):
-
-    transaction = get_transaction(transaction_id)
-
-    if transaction is None:
-        return {
-            "error": "Transaction not found"
-        }
-
-    return transaction
-
 # Endpoint to retrieve the fraud prediction for a specific transaction.
 @app.get("/transactions/{transaction_id}/prediction")
 def get_transaction_prediction(transaction_id: int):
@@ -257,16 +246,24 @@ def get_transaction_details(transaction_id: int):
         "investigation": investigation
     }
 
-# Batch prediction endpoint for multiple transactions.
+# Endpoint to screen a batch of transactions from an uploaded CSV file.
 @app.post("/predict/batch")
-async def predict_batch(file: UploadFile = File(...)):
+async def predict_batch(
+    file: UploadFile = File(...),
+    source_file: str = Form(...)
+):
+    """
+    Screen a newly uploaded CSV file.
 
-    # Read the uploaded CSV file into a DataFrame.
+    Every transaction inserted into MySQL is tagged with
+    the name of the CSV file it came from.
+    """
+
+    # Read the uploaded CSV file.
     contents = await file.read()
 
-    # Convert the CSV bytes into a pandas DataFrame.
+    # Convert the uploaded bytes into a pandas DataFrame.
     from io import BytesIO
-
     df = pd.read_csv(BytesIO(contents))
 
     # Define the features required by the XGBoost model.
@@ -279,14 +276,14 @@ async def predict_batch(file: UploadFile = File(...)):
         "Amount"
     ]
 
-    # Check whether all required model features are present.
+    # Check whether the uploaded CSV contains every required column.
     missing_columns = [
         column
         for column in feature_columns
         if column not in df.columns
     ]
 
-    # Stop if the uploaded CSV is missing required features.
+    # Stop if any required columns are missing.
     if missing_columns:
         return {
             "error": "Missing required columns",
@@ -296,44 +293,50 @@ async def predict_batch(file: UploadFile = File(...)):
     # Keep only the features required by the model.
     X = df[feature_columns]
 
-    # Generate fraud probabilities for every transaction.
+    # Generate fraud probabilities for all transactions.
     probabilities = predict_transaction_batch(X)
 
-    # Convert probabilities into HIGH/LOW risk labels.
+    # Convert probabilities into HIGH/LOW risk levels.
     risk_levels = [
         "HIGH" if probability >= FRAUD_THRESHOLD else "LOW"
         for probability in probabilities
     ]
 
-    # Count the two risk categories.
+    # Count HIGH-risk and LOW-risk transactions.
     high_risk_count = risk_levels.count("HIGH")
     low_risk_count = risk_levels.count("LOW")
 
-    # Store every processed transaction and its prediction in MySQL.
+    # Store flagged transactions so they can be displayed
+    # on the Streamlit dashboard.
     flagged_transactions = []
 
+    # Process every transaction in the uploaded CSV.
     for index, probability in enumerate(probabilities):
 
-        # Get the current transaction from the DataFrame.
+        # Get the current transaction row.
         row = df.iloc[index]
 
-        # Create transaction data using only the model features.
+        # Create a dictionary containing the model features.
         transaction_data = {
             column: row[column]
             for column in feature_columns
         }
 
-        # Save the transaction in MySQL.
-        transaction_id = insert_transaction(transaction_data)
+        # Insert the transaction into MySQL.
+        # The CSV filename is stored with the transaction.
+        transaction_id = insert_transaction(
+            transaction_data,
+            source_file=source_file
+        )
 
-        # Determine the risk level using the configured threshold.
+        # Determine the risk level.
         risk_level = (
             "HIGH"
             if probability >= FRAUD_THRESHOLD
             else "LOW"
         )
 
-        # Save the model prediction in MySQL.
+        # Store the model prediction in MySQL.
         prediction_id = insert_prediction(
             transaction_id=transaction_id,
             fraud_probability=float(probability),
@@ -341,16 +344,16 @@ async def predict_batch(file: UploadFile = File(...)):
             model_version="xgboost_v1"
         )
 
-        # Create an investigation automatically for HIGH-risk transactions.
+        # Create an investigation for HIGH-risk transactions.
         if risk_level == "HIGH":
 
-            # Create an OPEN investigation linked to this transaction.
+            # Create an OPEN investigation.
             investigation_id = insert_investigation(
                 transaction_id=transaction_id,
                 status="OPEN"
             )
 
-            # Return the flagged transaction along with its database IDs.
+            # Add the flagged transaction to the response.
             flagged_transactions.append({
                 "index": index,
                 "transaction_id": transaction_id,
@@ -360,13 +363,43 @@ async def predict_batch(file: UploadFile = File(...)):
                 "risk_level": risk_level
             })
 
-    # Return a compact batch summary instead of all predictions.
+    # Return the screening summary.
     return {
+        "source_file": source_file,
         "total_transactions": len(df),
         "high_risk_transactions": high_risk_count,
         "low_risk_transactions": low_risk_count,
         "flagged_transactions": flagged_transactions
     }
+
+# Endpoint to retrieve previously screened transactions for a CSV file.
+@app.get("/transactions/by-source")
+def get_transactions_by_source(source_file: str):
+    """
+    Retrieve previously screened transactions for a CSV file.
+
+    This endpoint is read-only.
+    It does NOT insert anything into MySQL.
+    """
+
+    # Retrieve existing results from MySQL.
+    result = get_batch_results_by_source_file(source_file)
+
+    # Return the stored results.
+    return result
+
+# Endpoint to retrieve a single transaction by its ID.
+@app.get("/transactions/{transaction_id}")
+def get_single_transaction(transaction_id: int):
+
+    transaction = get_transaction(transaction_id)
+
+    if transaction is None:
+        return {
+            "error": "Transaction not found"
+        }
+
+    return transaction
 
 # Endpoint to generate a SHAP explanation for an existing transaction.
 @app.get("/transactions/{transaction_id}/explanation")
@@ -397,4 +430,17 @@ def get_transaction_explanation(transaction_id: int):
     return {
         "transaction_id": transaction_id,
         "explanation": explanation
+    }
+
+# Endpoint to retrieve all audit log entries from the database.
+@app.get("/audit-logs")
+def get_all_audit_logs():
+
+    # Retrieve audit logs from MySQL.
+    logs = get_audit_logs()
+
+    # Return the logs along with the total count.
+    return {
+        "count": len(logs),
+        "logs": logs
     }
