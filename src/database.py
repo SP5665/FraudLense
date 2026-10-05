@@ -274,3 +274,25 @@ def get_transaction_id_for_investigation(investigation_id):
     if result is None: return None
 
     return result[0]
+
+# Retrieve all transactions from the database.
+def get_transactions():
+
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True) # Use dictionary=True to get results as dictionaries
+
+    query = """
+    SELECT *
+    FROM transactions
+    ORDER BY transaction_id DESC
+    """
+
+    cursor.execute(query)
+
+    # Fetch all matching transactions.
+    transactions = cursor.fetchall()
+
+    cursor.close()
+    connection.close()
+
+    return transactions

@@ -6,7 +6,8 @@ from .database import (
     transaction_exists,
     update_investigation_decision,
     insert_audit_log,
-    get_transaction_id_for_investigation
+    get_transaction_id_for_investigation,
+    get_transactions
 )
 
 # Create the FastAPI application and define its metadata.
@@ -154,4 +155,17 @@ def make_investigation_decision(
         "status": "CLOSED",
         "analyst_decision": decision.analyst_decision,
         "analyst_notes": decision.analyst_notes
+    }
+
+# Endpoint to retrieve all transactions stored in the database.
+@app.get("/transactions")
+def get_all_transactions():
+
+    # Retrieve the transaction records from the database.
+    transactions = get_transactions()
+
+    # Return them to the API client.
+    return {
+        "count": len(transactions),
+        "transactions": transactions
     }
