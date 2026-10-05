@@ -114,3 +114,12 @@ def predict_transaction(transaction):
         "risk_level": risk_level,
         "explanation": explanation
     }
+
+# Batch prediction function for multiple transactions.
+def predict_transaction_batch(transaction_df):
+
+    # Generate fraud probabilities for all transactions at once.
+    probabilities = model.predict_proba(transaction_df)[:, 1]
+
+    # Return the probabilities as a NumPy array.
+    return probabilities

@@ -1,7 +1,14 @@
-from fastapi import FastAPI
+import pandas as pd
+from fastapi import FastAPI, UploadFile, File
 from pydantic import BaseModel
-from .predict import predict_transaction
+from .predict import (
+    predict_transaction,
+    predict_transaction_batch,
+    FRAUD_THRESHOLD
+)
 from .database import (
+    insert_transaction,
+    insert_prediction,
     insert_investigation,
     transaction_exists,
     update_investigation_decision,
@@ -247,4 +254,115 @@ def get_transaction_details(transaction_id: int):
         "transaction": transaction,
         "prediction": prediction,
         "investigation": investigation
+    }
+
+# Batch prediction endpoint for multiple transactions.
+@app.post("/predict/batch")
+async def predict_batch(file: UploadFile = File(...)):
+
+    # Read the uploaded CSV file into a DataFrame.
+    contents = await file.read()
+
+    # Convert the CSV bytes into a pandas DataFrame.
+    from io import BytesIO
+
+    df = pd.read_csv(BytesIO(contents))
+
+    # Define the features required by the XGBoost model.
+    feature_columns = [
+        "Time",
+        "V1", "V2", "V3", "V4", "V5", "V6", "V7",
+        "V8", "V9", "V10", "V11", "V12", "V13", "V14",
+        "V15", "V16", "V17", "V18", "V19", "V20", "V21",
+        "V22", "V23", "V24", "V25", "V26", "V27", "V28",
+        "Amount"
+    ]
+
+    # Check whether all required model features are present.
+    missing_columns = [
+        column
+        for column in feature_columns
+        if column not in df.columns
+    ]
+
+    # Stop if the uploaded CSV is missing required features.
+    if missing_columns:
+        return {
+            "error": "Missing required columns",
+            "missing_columns": missing_columns
+        }
+
+    # Keep only the features required by the model.
+    X = df[feature_columns]
+
+    # Generate fraud probabilities for every transaction.
+    probabilities = predict_transaction_batch(X)
+
+    # Convert probabilities into HIGH/LOW risk labels.
+    risk_levels = [
+        "HIGH" if probability >= FRAUD_THRESHOLD else "LOW"
+        for probability in probabilities
+    ]
+
+    # Count the two risk categories.
+    high_risk_count = risk_levels.count("HIGH")
+    low_risk_count = risk_levels.count("LOW")
+
+    # Store every processed transaction and its prediction in MySQL.
+    flagged_transactions = []
+
+    for index, probability in enumerate(probabilities):
+
+        # Get the current transaction from the DataFrame.
+        row = df.iloc[index]
+
+        # Create transaction data using only the model features.
+        transaction_data = {
+            column: row[column]
+            for column in feature_columns
+        }
+
+        # Save the transaction in MySQL.
+        transaction_id = insert_transaction(transaction_data)
+
+        # Determine the risk level using the configured threshold.
+        risk_level = (
+            "HIGH"
+            if probability >= FRAUD_THRESHOLD
+            else "LOW"
+        )
+
+        # Save the model prediction in MySQL.
+        prediction_id = insert_prediction(
+            transaction_id=transaction_id,
+            fraud_probability=float(probability),
+            risk_level=risk_level,
+            model_version="xgboost_v1"
+        )
+
+        # Create an investigation automatically for HIGH-risk transactions.
+        if risk_level == "HIGH":
+
+            # Create an OPEN investigation linked to this transaction.
+            investigation_id = insert_investigation(
+                transaction_id=transaction_id,
+                status="OPEN"
+            )
+
+            # Return the flagged transaction along with its database IDs.
+            flagged_transactions.append({
+                "index": index,
+                "transaction_id": transaction_id,
+                "prediction_id": prediction_id,
+                "investigation_id": investigation_id,
+                "fraud_probability": float(probability),
+                "risk_level": risk_level
+            })
+
+    # Return a compact batch summary instead of all predictions.
+    return {
+        "total_transactions": len(df),
+        "high_risk_transactions": high_risk_count,
+        "low_risk_transactions": low_risk_count,
+        "flagged_transactions": flagged_transactions
     }
