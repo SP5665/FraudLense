@@ -263,8 +263,6 @@ def get_transaction_id_for_investigation(investigation_id):
     """
 
     cursor.execute(query, (investigation_id,))
-
-    # Get the matching row, if it exists.
     result = cursor.fetchone()
 
     cursor.close()
@@ -296,3 +294,23 @@ def get_transactions():
     connection.close()
 
     return transactions
+
+# Retrieve a single transaction by its ID.
+def get_transaction(transaction_id):
+
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    query = """
+    SELECT *
+    FROM transactions
+    WHERE transaction_id = %s
+    """
+
+    cursor.execute(query, (transaction_id,))
+    transaction = cursor.fetchone()
+
+    cursor.close()
+    connection.close()
+
+    return transaction

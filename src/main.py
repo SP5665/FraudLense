@@ -7,7 +7,8 @@ from .database import (
     update_investigation_decision,
     insert_audit_log,
     get_transaction_id_for_investigation,
-    get_transactions
+    get_transactions,
+    get_transaction
 )
 
 # Create the FastAPI application and define its metadata.
@@ -169,3 +170,16 @@ def get_all_transactions():
         "count": len(transactions),
         "transactions": transactions
     }
+
+# Endpoint to retrieve a single transaction by its ID.
+@app.get("/transactions/{transaction_id}")
+def get_single_transaction(transaction_id: int):
+
+    transaction = get_transaction(transaction_id)
+
+    if transaction is None:
+        return {
+            "error": "Transaction not found"
+        }
+
+    return transaction
