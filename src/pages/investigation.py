@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import pandas as pd
 
 # Configure the Streamlit page.
 st.set_page_config(
@@ -97,53 +98,72 @@ shap_response = requests.get(
 
 # Check whether the SHAP request was successful.
 if shap_response.status_code != 200:
-
     st.error(
         f"Failed to load SHAP explanation. "
         f"Status code: {shap_response.status_code}"
     )
-
 else:
-
-    # Convert the SHAP response into a Python dictionary.
+    # Convert the API response into a Python dictionary.
     shap_result = shap_response.json()
 
-    # Get the list of top contributing features.
+    # Get the top contributing features.
     explanation = shap_result["explanation"]
 
-    # Explain what the SHAP values mean.
     st.write(
-        "SHAP values show how individual features influenced "
-        "the model's prediction. Positive values push the prediction "
-        "toward fraud, while negative values push it away from fraud."
+        "These features had the strongest influence on the model's "
+        "fraud prediction."
     )
 
-    # Display the explanation as a table.
+    # Prepare data for the SHAP table.
+    shap_data = []
+
     for item in explanation:
 
-        # Get the feature name.
+        # Get the feature name and SHAP contribution.
         feature = item["feature"]
-
-        # Get the SHAP contribution.
         shap_value = item["shap_value"]
 
-        # Display the feature and its contribution.
+        # Positive SHAP values push the prediction toward fraud.
         if shap_value > 0:
-
-            st.write(
-                f"**{feature}** → "
-                f"🟥 +{shap_value:.4f} "
-                f"(toward fraud)"
-            )
-
+            direction = "Toward fraud"
         else:
+            direction = "Away from fraud"
 
-            st.write(
-                f"**{feature}** → "
-                f"🟦 {shap_value:.4f} "
-                f"(away from fraud)"
-            )
+        shap_data.append({
+            "Feature": feature,
+            "SHAP Value": round(shap_value, 4),
+            "Influence": direction
+        })
 
+    # Display the SHAP contributions as a table.
+    st.dataframe(
+        shap_data,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # Separate the table from the visual chart.
+    st.divider()
+
+    # Display the SHAP contribution chart.
+    st.subheader("📊 Feature Contribution")
+
+    # Create a DataFrame for the SHAP chart.
+    shap_chart_df = pd.DataFrame(shap_data)
+
+    # Display the SHAP values as a bar chart.
+    st.bar_chart(
+        shap_chart_df,
+        x="Feature",
+        y="SHAP Value"
+    )
+
+    # Display a simple explanation below the table.
+    st.info(
+        "Positive SHAP values push the model toward a fraud prediction, "
+        "while negative SHAP values push it away from fraud. "
+        "Larger absolute values indicate stronger influence."
+    )
 
 # ---------------------------------------------------------
 # INVESTIGATION
