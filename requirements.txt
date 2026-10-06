@@ -11,4 +11,3 @@ uvicorn
 streamlit
 requests
 python-multipart
-groq
