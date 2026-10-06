@@ -697,3 +697,83 @@ def get_audit_logs():
 
     # Return the audit logs.
     return logs
+
+# ---------------------------------------------------------
+# GET ALL TRANSACTIONS, PREDICTIONS, INVESTIGATIONS, AUDIT LOG
+# ---------------------------------------------------------
+
+# Retrieve all records from the transactions table.
+def get_all_transactions():
+
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT *
+        FROM transactions
+        ORDER BY transaction_id DESC
+    """)
+
+    transactions = cursor.fetchall()
+
+    cursor.close()
+    connection.close()
+
+    return transactions
+
+# Retrieve all records from the predictions table.
+def get_all_predictions():
+
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT *
+        FROM predictions
+        ORDER BY prediction_id DESC
+    """)
+
+    predictions = cursor.fetchall()
+
+    cursor.close()
+    connection.close()
+
+    return predictions
+
+# Retrieve all records from the investigations table.
+def get_all_investigations():
+
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT *
+        FROM investigations
+        ORDER BY investigation_id DESC
+    """)
+
+    investigations = cursor.fetchall()
+
+    cursor.close()
+    connection.close()
+
+    return investigations
+
+# retrieve all records from the audit_logs table.
+def get_all_audit_logs():
+
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT *
+        FROM audit_logs
+        ORDER BY log_id DESC
+    """)
+
+    logs = cursor.fetchall()
+
+    cursor.close()
+    connection.close()
+
+    return logs

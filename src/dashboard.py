@@ -426,3 +426,290 @@ if result is not None:
         st.success(
             "No high-risk transactions were detected."
         )
+
+# ---------------------------------------------------------
+# DATABASE TABLES
+# ---------------------------------------------------------
+
+st.divider()
+
+st.header("📊 Database Tables")
+
+st.write(
+    "View the data stored in each FraudLense MySQL table."
+)
+
+# Create four buttons for the four database tables.
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    view_transactions = st.button(
+        "📋 Transactions",
+        use_container_width=True
+    )
+
+with col2:
+    view_predictions = st.button(
+        "🤖 Predictions",
+        use_container_width=True
+    )
+
+with col3:
+    view_investigations = st.button(
+        "🔎 Investigations",
+        use_container_width=True
+    )
+
+with col4:
+    view_audit_logs = st.button(
+        "📝 Audit Logs",
+        use_container_width=True
+    )
+
+
+# ---------------------------------------------------------
+# TRANSACTIONS
+# ---------------------------------------------------------
+
+if view_transactions:
+
+    try:
+        response = requests.get(
+            f"{API_URL}/database/transactions",
+            timeout=30
+        )
+
+        if response.status_code == 200:
+
+            result = response.json()
+
+            # Get the transaction data returned by FastAPI.
+            transaction_data = result.get("transactions", {})
+
+            # If the transactions data is nested,
+            # get the actual transaction list.
+            if isinstance(transaction_data, dict):
+                transaction_data = transaction_data.get(
+                    "transactions",
+                    []
+                )
+
+            # Convert the returned records directly into a DataFrame.
+            transactions_df = pd.DataFrame(
+                transaction_data
+            )
+
+            # If "count" somehow exists as a column,
+            # remove it from the displayed table.
+            if "count" in transactions_df.columns:
+                transactions_df = transactions_df.drop(
+                    columns=["count"]
+                )
+
+            st.success(
+                f"{len(transactions_df)} transactions found."
+            )
+
+            st.dataframe(
+                transactions_df,
+                use_container_width=True,
+                hide_index=True
+            )
+
+        else:
+            st.error(
+                f"Failed to load transactions. "
+                f"Status code: {response.status_code}"
+            )
+
+    except requests.RequestException as error:
+
+        st.error(
+            f"Could not connect to FastAPI: {error}"
+        )
+
+
+# ---------------------------------------------------------
+# PREDICTIONS
+# ---------------------------------------------------------
+
+if view_predictions:
+
+    try:
+        response = requests.get(
+            f"{API_URL}/database/predictions",
+            timeout=30
+        )
+
+        if response.status_code == 200:
+
+            result = response.json()
+
+            # Get only the prediction records.
+            predictions = result.get(
+                "predictions",
+                []
+            )
+
+            predictions_df = pd.DataFrame(
+                predictions
+            )
+
+            st.success(
+                f"{len(predictions_df)} predictions found."
+            )
+
+            if not predictions_df.empty:
+
+                st.dataframe(
+                    predictions_df,
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+            else:
+                st.info("No predictions found.")
+
+        else:
+            st.error(
+                f"Failed to load predictions. "
+                f"Status code: {response.status_code}"
+            )
+
+    except requests.RequestException as error:
+
+        st.error(
+            f"Could not connect to FastAPI: {error}"
+        )
+
+
+# ---------------------------------------------------------
+# INVESTIGATIONS
+# ---------------------------------------------------------
+
+if view_investigations:
+
+    try:
+        response = requests.get(
+            f"{API_URL}/database/investigations",
+            timeout=30
+        )
+
+        if response.status_code == 200:
+
+            result = response.json()
+
+            # Get only the investigation records.
+            investigations = result.get(
+                "investigations",
+                []
+            )
+
+            investigations_df = pd.DataFrame(
+                investigations
+            )
+
+            st.success(
+                f"{len(investigations_df)} investigations found."
+            )
+
+            if not investigations_df.empty:
+
+                st.dataframe(
+                    investigations_df,
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+            else:
+                st.info("No investigations found.")
+
+        else:
+            st.error(
+                f"Failed to load investigations. "
+                f"Status code: {response.status_code}"
+            )
+
+    except requests.RequestException as error:
+
+        st.error(
+            f"Could not connect to FastAPI: {error}"
+        )
+
+
+# ---------------------------------------------------------
+# AUDIT LOGS
+# ---------------------------------------------------------
+
+if view_audit_logs:
+
+    try:
+        # Request all audit logs from FastAPI.
+        response = requests.get(
+            f"{API_URL}/database/audit-logs",
+            timeout=30
+        )
+
+        # Check whether the request was successful.
+        if response.status_code == 200:
+
+            # Convert the API response into a dictionary.
+            result = response.json()
+
+            # Get the logs from the API response.
+            logs_data = result.get(
+                "logs",
+                []
+            )
+
+            # If the logs are nested inside another dictionary,
+            # get the actual list of audit log records.
+            if isinstance(logs_data, dict):
+                logs_data = logs_data.get(
+                    "logs",
+                    []
+                )
+
+            # Convert the actual audit log records into a DataFrame.
+            logs_df = pd.DataFrame(
+                logs_data
+            )
+
+            # Remove the count column if it is present.
+            if "count" in logs_df.columns:
+                logs_df = logs_df.drop(
+                    columns=["count"]
+                )
+
+            # Display the total number of audit logs.
+            st.success(
+                f"{len(logs_df)} audit log entries found."
+            )
+
+            # Display the audit log table.
+            if not logs_df.empty:
+
+                st.dataframe(
+                    logs_df,
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+            else:
+                st.info(
+                    "No audit log entries found."
+                )
+
+        else:
+            # Show an error if FastAPI returned an unsuccessful status.
+            st.error(
+                f"Failed to load audit logs. "
+                f"Status code: {response.status_code}"
+            )
+
+    except requests.RequestException as error:
+
+        # Show an error if FastAPI cannot be reached.
+        st.error(
+            f"Could not connect to FastAPI: {error}"
+        )

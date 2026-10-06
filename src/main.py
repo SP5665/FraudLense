@@ -23,7 +23,11 @@ from .database import (
     get_prediction,
     get_investigation,
     get_audit_logs,
-    get_batch_results_by_source_file
+    get_batch_results_by_source_file,
+    get_all_transactions,
+    get_all_predictions,
+    get_all_investigations,
+    get_all_audit_logs
 )
 
 # ---------------------------------------------------------
@@ -497,6 +501,54 @@ def get_transactions_by_source(
 
     # Return the stored results.
     return result
+
+#---------------------------------------------------------
+# DATABASE ROUTES
+#---------------------------------------------------------
+
+# Retrieve all records from the transactions table.
+@app.get("/database/transactions")
+def database_transactions():
+
+    transactions = get_all_transactions()
+
+    return {
+        "count": len(transactions),
+        "transactions": transactions
+    }
+
+# Retrieve all records from the predictions table.
+@app.get("/database/predictions")
+def database_predictions():
+
+    predictions = get_all_predictions()
+
+    return {
+        "count": len(predictions),
+        "predictions": predictions
+    }
+
+# Retrieve all records from the investigations table.
+@app.get("/database/investigations")
+def database_investigations():
+
+    investigations = get_all_investigations()
+
+    return {
+        "count": len(investigations),
+        "investigations": investigations
+    }
+
+# Retrieve all records from the audit_logs table.
+@app.get("/database/audit-logs")
+def database_audit_logs():
+
+    logs = get_all_audit_logs()
+
+    return {
+        "count": len(logs),
+        "logs": logs
+    }
 
 # ---------------------------------------------------------
 # SINGLE TRANSACTION
