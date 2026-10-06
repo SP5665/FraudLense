@@ -9,6 +9,7 @@ from .database import insert_transaction, insert_prediction
 load_dotenv()
 
 # Read the fraud threshold from the environment.
+# If FRAUD_THRESHOLD is not present, use 0.5 as the default.
 FRAUD_THRESHOLD = float(
     os.getenv("FRAUD_THRESHOLD", "0.5")
 )
@@ -18,6 +19,7 @@ model = xgb.XGBClassifier()
 model.load_model("models/fraud_model.json")
 
 # Create the SHAP explainer once when the application starts.
+# This avoids recreating the explainer for every request.
 explainer = shap.TreeExplainer(model)
 
 # Keep the feature order identical to the training dataset.
@@ -30,25 +32,23 @@ FEATURE_COLUMNS = [
     "Amount"
 ]
 
+# The following functions are used to predict fraud probabilities and generate SHAP explanations for transactions.
 def predict_transaction(transaction):
-    """
-    Predict whether a transaction is fraudulent,
-    store the result in MySQL, and generate SHAP
-    explanations for high-risk transactions.
-    """
 
     # Convert the transaction dictionary into a DataFrame.
     transaction_df = pd.DataFrame([transaction])
 
-    # Ensure the model receives the same feature order that was used during training.
+    # Ensure the model receives the same feature order
+    # that was used during training.
     transaction_df = transaction_df[FEATURE_COLUMNS]
 
-    # Get the probability that this transaction belongs to the fraud class.
+    # Get the probability that this transaction belongs
+    # to the fraud class.
     fraud_probability = model.predict_proba(
         transaction_df
     )[0][1]
 
-    # Compare the probability with our configured threshold.
+    # Compare the probability with the configured threshold.
     if fraud_probability >= FRAUD_THRESHOLD:
         risk_level = "HIGH"
     else:
@@ -65,36 +65,40 @@ def predict_transaction(transaction):
         "xgboost_v1"
     )
 
-    # Start with no explanation for low-risk transactions.
+    # Start with an empty explanation.
+    # SHAP will only be calculated for HIGH-risk transactions.
     explanation = []
 
-    # Calculate SHAP only for transactions that cross the fraud threshold.
-    if fraud_probability >= FRAUD_THRESHOLD:
+    if risk_level == "HIGH":
 
         # Calculate SHAP values for this transaction.
-        shap_values = explainer.shap_values(transaction_df)
+        shap_values = explainer.shap_values(
+            transaction_df
+        )
 
-        # Get the SHAP values for this single transaction.
+        # Get the SHAP values for this transaction.
         values = shap_values[0]
 
-        # Create a table containing each feature and its contribution to the prediction.
+        # Create a table containing each feature
+        # and its contribution to the prediction.
         explanation_df = pd.DataFrame({
             "feature": FEATURE_COLUMNS,
             "shap_value": values
         })
 
-        # Calculate the absolute contribution so we can identify the strongest factors.
+        # Calculate absolute SHAP values so we can identify
+        # the features with the strongest influence.
         explanation_df["absolute_shap"] = (
             explanation_df["shap_value"].abs()
         )
 
-        # Sort from strongest contribution to weakest.
+        # Sort features from strongest contribution to weakest.
         explanation_df = explanation_df.sort_values(
             "absolute_shap",
             ascending=False
         )
 
-        # Return the five strongest contributors.
+        # Keep the five strongest contributors.
         top_features = explanation_df.head(5)
 
         # Convert the result into JSON-friendly dictionaries.
@@ -115,16 +119,18 @@ def predict_transaction(transaction):
         "explanation": explanation
     }
 
-# Batch prediction function for multiple transactions.
+# Generate fraud probabilities for multiple transactions in a batch.
 def predict_transaction_batch(transaction_df):
 
     # Generate fraud probabilities for all transactions at once.
-    probabilities = model.predict_proba(transaction_df)[:, 1]
+    probabilities = model.predict_proba(
+        transaction_df
+    )[:, 1]
 
-    # Return the probabilities as a NumPy array.
+    # Return the probabilities.
     return probabilities
 
-# Generate SHAP explanations for a single transaction.
+# Generate a SHAP explanation for one existing transaction.
 def explain_transaction(transaction):
 
     # Convert the transaction dictionary into a DataFrame.
@@ -134,19 +140,21 @@ def explain_transaction(transaction):
     transaction_df = transaction_df[FEATURE_COLUMNS]
 
     # Calculate SHAP values for this transaction.
-    shap_values = explainer.shap_values(transaction_df)
+    shap_values = explainer.shap_values(
+        transaction_df
+    )
 
-    # Get SHAP values for the first (and only) transaction.
+    # Get the SHAP values for the first transaction.
     values = shap_values[0]
 
-    # Create a DataFrame containing each feature and its contribution.
+    # Create a table containing each feature and its contribution.
     explanation_df = pd.DataFrame({
         "feature": FEATURE_COLUMNS,
         "shap_value": values
     })
 
-    # Calculate the absolute contribution so we can find
-    # the features that influenced the prediction the most.
+    # Calculate absolute SHAP values to find
+    # the strongest contributors.
     explanation_df["absolute_shap"] = (
         explanation_df["shap_value"].abs()
     )
@@ -157,10 +165,10 @@ def explain_transaction(transaction):
         ascending=False
     )
 
-    # Keep only the top 5 contributing features.
+    # Keep only the top five contributing features.
     top_features = explanation_df.head(5)
 
-    # Convert the result into a simple list of dictionaries.
+    # Convert the result into JSON-friendly dictionaries.
     return [
         {
             "feature": row["feature"],

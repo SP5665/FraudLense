@@ -1,11 +1,17 @@
+import os
 import mysql.connector
 from dotenv import load_dotenv
-import os
 
+# Load database configuration from the .env file.
 load_dotenv()
 
-# Database connection and insertion functions
+# ---------------------------------------------------------
+# DATABASE CONNECTION
+# ---------------------------------------------------------
+
+# Get a connection to the MySQL database.
 def get_connection():
+
     return mysql.connector.connect(
         host=os.getenv("MYSQL_HOST"),
         user=os.getenv("MYSQL_USER"),
@@ -13,19 +19,20 @@ def get_connection():
         database=os.getenv("MYSQL_DATABASE")
     )
 
-# Insert a transaction into the database.
-def insert_transaction(transaction, source_file=None):
-    """
-    Insert a transaction into MySQL.
+# ---------------------------------------------------------
+# INSERT TRANSACTION
+# ---------------------------------------------------------
 
-    source_file stores the CSV filename that the transaction
-    came from.
-    """
+# Insert a transaction into the transactions table.
+def insert_transaction(
+    transaction,
+    source_file=None
+):
 
     # Open a database connection.
     connection = get_connection()
 
-    # Create a cursor.
+    # Create a cursor for executing SQL statements.
     cursor = connection.cursor()
 
     # Define the 28 PCA feature names.
@@ -36,18 +43,22 @@ def insert_transaction(transaction, source_file=None):
         "V22", "V23", "V24", "V25", "V26", "V27", "V28"
     ]
 
-    # Build the column names.
+    # Build the database column names.
     columns = [
         "transaction_time",
         "amount"
     ]
 
+    # Convert V1...V28 into the lowercase database column names.
     columns.extend(
         column.lower()
         for column in feature_columns
     )
 
-    columns.append("source_file")
+    # Add the source CSV filename.
+    columns.append(
+        "source_file"
+    )
 
     # Build the values in exactly the same order as the columns.
     values = [
@@ -60,14 +71,17 @@ def insert_transaction(transaction, source_file=None):
         for column in feature_columns
     )
 
-    values.append(source_file)
+    # Add the source CSV filename.
+    values.append(
+        source_file
+    )
 
-    # Create exactly one placeholder for every value.
+    # Create one SQL placeholder for every value.
     placeholders = ", ".join(
         ["%s"] * len(values)
     )
 
-    # Create the INSERT query.
+    # Build the INSERT query.
     query = f"""
         INSERT INTO transactions (
             {", ".join(columns)}
@@ -86,36 +100,46 @@ def insert_transaction(transaction, source_file=None):
     # Save the transaction.
     connection.commit()
 
-    # Get the generated transaction ID.
+    # Get the automatically generated transaction ID.
     transaction_id = cursor.lastrowid
 
     # Close database resources.
     cursor.close()
     connection.close()
 
-    # Return the generated ID.
+    # Return the generated transaction ID.
     return transaction_id
 
-# Insert a prediction into the predictions table
+# ---------------------------------------------------------
+# INSERT PREDICTION
+# ---------------------------------------------------------
+
+# Store a model prediction in the predictions table.
 def insert_prediction(
     transaction_id,
     fraud_probability,
     risk_level,
     model_version
 ):
+
+    # Open a database connection.
     connection = get_connection()
+
+    # Create a cursor.
     cursor = connection.cursor()
 
+    # Define the INSERT query.
     query = """
-    INSERT INTO predictions (
-        transaction_id,
-        fraud_probability,
-        risk_level,
-        model_version
-    )
-    VALUES (%s, %s, %s, %s)
+        INSERT INTO predictions (
+            transaction_id,
+            fraud_probability,
+            risk_level,
+            model_version
+        )
+        VALUES (%s, %s, %s, %s)
     """
 
+    # Values to insert.
     values = (
         transaction_id,
         fraud_probability,
@@ -123,16 +147,30 @@ def insert_prediction(
         model_version
     )
 
-    cursor.execute(query, values)
+    # Execute the query.
+    cursor.execute(
+        query,
+        values
+    )
+
+    # Save the prediction.
     connection.commit()
 
+    # Get the generated prediction ID.
     prediction_id = cursor.lastrowid
 
+    # Close database resources.
     cursor.close()
     connection.close()
 
+    # Return the generated prediction ID.
     return prediction_id
 
+# ---------------------------------------------------------
+# INSERT INVESTIGATION
+# ---------------------------------------------------------
+
+# Create an investigation for a transaction.
 def insert_investigation(
     transaction_id,
     status,
@@ -140,19 +178,24 @@ def insert_investigation(
     analyst_notes=None
 ):
 
+    # Open a database connection.
     connection = get_connection()
+
+    # Create a cursor.
     cursor = connection.cursor()
 
+    # Define the INSERT query.
     query = """
-    INSERT INTO investigations (
-        transaction_id,
-        status,
-        analyst_decision,
-        analyst_notes
-    )
-    VALUES (%s, %s, %s, %s)
+        INSERT INTO investigations (
+            transaction_id,
+            status,
+            analyst_decision,
+            analyst_notes
+        )
+        VALUES (%s, %s, %s, %s)
     """
 
+    # Values to insert.
     values = (
         transaction_id,
         status,
@@ -160,68 +203,106 @@ def insert_investigation(
         analyst_notes
     )
 
-    cursor.execute(query, values)
+    # Execute the query.
+    cursor.execute(
+        query,
+        values
+    )
+
+    # Save the investigation.
     connection.commit()
 
+    # Get the generated investigation ID.
     investigation_id = cursor.lastrowid
 
+    # Close database resources.
     cursor.close()
     connection.close()
 
+    # Return the generated investigation ID.
     return investigation_id
 
+# ---------------------------------------------------------
+# INSERT AUDIT LOG
+# ---------------------------------------------------------
+
+# Store an action in the audit log.
 def insert_audit_log(
     transaction_id,
     action,
     details=None
 ):
 
+    # Open a database connection.
     connection = get_connection()
+
+    # Create a cursor.
     cursor = connection.cursor()
 
+    # Define the INSERT query.
     query = """
-    INSERT INTO audit_logs (
-        transaction_id,
-        action,
-        details
-    )
-    VALUES (%s, %s, %s)
+        INSERT INTO audit_logs (
+            transaction_id,
+            action,
+            details
+        )
+        VALUES (%s, %s, %s)
     """
 
+    # Values to insert.
     values = (
         transaction_id,
         action,
         details
     )
 
-    cursor.execute(query, values)
+    # Execute the query.
+    cursor.execute(
+        query,
+        values
+    )
+
+    # Save the audit log entry.
     connection.commit()
 
+    # Get the generated log ID.
     log_id = cursor.lastrowid
 
+    # Close database resources.
     cursor.close()
     connection.close()
 
+    # Return the generated log ID.
     return log_id
 
-# Update an investigation with the analyst's final decision and optional notes.
+# ---------------------------------------------------------
+# UPDATE INVESTIGATION DECISION
+# ---------------------------------------------------------
+
+# Update an investigation with the analyst's final decision and notes.
 def update_investigation_decision(
     investigation_id,
     analyst_decision,
     analyst_notes=None
 ):
+
+    # Open a database connection.
     connection = get_connection()
+
+    # Create a cursor.
     cursor = connection.cursor()
 
+    # Define the UPDATE query.
     query = """
-    UPDATE investigations
-    SET
-        status = %s,
-        analyst_decision = %s,
-        analyst_notes = %s
-    WHERE investigation_id = %s
+        UPDATE investigations
+        SET
+            status = %s,
+            analyst_decision = %s,
+            analyst_notes = %s
+        WHERE investigation_id = %s
     """
 
+    # Values for the UPDATE query.
     values = (
         "CLOSED",
         analyst_decision,
@@ -229,120 +310,201 @@ def update_investigation_decision(
         investigation_id
     )
 
-    cursor.execute(query, values)
+    # Execute the UPDATE query.
+    cursor.execute(
+        query,
+        values
+    )
+
+    # Save the changes.
     connection.commit()
 
+    # Store the number of rows affected.
+    affected_rows = cursor.rowcount
+
+    # Close database resources.
     cursor.close()
     connection.close()
 
-    return cursor.rowcount
+    # Return the number of affected rows.
+    return affected_rows
+
+# ---------------------------------------------------------
+# CHECK TRANSACTION EXISTS
+# ---------------------------------------------------------
 
 # Check whether a transaction exists in the database.
-def transaction_exists(transaction_id):
+def transaction_exists(
+    transaction_id
+):
 
+    # Open a database connection.
     connection = get_connection()
+
+    # Create a cursor.
     cursor = connection.cursor()
 
+    # Define the SELECT query.
     query = """
-    SELECT transaction_id
-    FROM transactions
-    WHERE transaction_id = %s
+        SELECT transaction_id
+        FROM transactions
+        WHERE transaction_id = %s
     """
 
-    # Execute the query with the provided transaction_id.
-    cursor.execute(query, (transaction_id,))
-    # Get the first matching row, if one exists.
+    # Execute the query.
+    cursor.execute(
+        query,
+        (transaction_id,)
+    )
+
+    # Get the first matching row.
     result = cursor.fetchone()
 
+    # Close database resources.
     cursor.close()
     connection.close()
 
     # Return True if the transaction was found.
     return result is not None
 
-# Find the transaction associated with an investigation.
-def get_transaction_id_for_investigation(investigation_id):
+# ---------------------------------------------------------
+# GET TRANSACTION ID FOR INVESTIGATION
+# ---------------------------------------------------------
 
+# Find the transaction associated with an investigation.
+def get_transaction_id_for_investigation(
+    investigation_id
+):
+
+    # Open a database connection.
     connection = get_connection()
+
+    # Create a cursor.
     cursor = connection.cursor()
 
+    # Define the SELECT query.
     query = """
-    SELECT transaction_id
-    FROM investigations
-    WHERE investigation_id = %s
+        SELECT transaction_id
+        FROM investigations
+        WHERE investigation_id = %s
     """
 
-    cursor.execute(query, (investigation_id,))
+    # Execute the query.
+    cursor.execute(
+        query,
+        (investigation_id,)
+    )
+
+    # Get the matching row.
     result = cursor.fetchone()
 
+    # Close database resources.
     cursor.close()
     connection.close()
 
-    # Return the transaction ID, or None if not found.
-    if result is None: return None
+    # Return None if the investigation was not found.
+    if result is None:
+        return None
 
+    # Return the associated transaction ID.
     return result[0]
+
+# ---------------------------------------------------------
+# GET ALL TRANSACTIONS
+# ---------------------------------------------------------
 
 # Retrieve all transactions from the database.
 def get_transactions():
 
+    # Open a database connection.
     connection = get_connection()
-    # Use a dictionary cursor so the result has column names.
-    cursor = connection.cursor(dictionary=True)
 
+    # Use a dictionary cursor so column names are included.
+    cursor = connection.cursor(
+        dictionary=True
+    )
+
+    # Retrieve transactions from newest to oldest.
     query = """
-    SELECT *
-    FROM transactions
-    ORDER BY transaction_id DESC
+        SELECT *
+        FROM transactions
+        ORDER BY transaction_id DESC
     """
 
-    cursor.execute(query)
+    # Execute the query.
+    cursor.execute(
+        query
+    )
 
     # Fetch all matching transactions.
     transactions = cursor.fetchall()
 
+    # Close database resources.
     cursor.close()
     connection.close()
 
+    # Return the transactions.
     return transactions
 
+# ---------------------------------------------------------
+# GET SINGLE TRANSACTION
+# ---------------------------------------------------------
+
 # Retrieve a single transaction by its ID.
-def get_transaction(transaction_id):
+def get_transaction(
+    transaction_id
+):
 
+    # Open a database connection.
     connection = get_connection()
-    cursor = connection.cursor(dictionary=True)
 
+    # Use a dictionary cursor for named columns.
+    cursor = connection.cursor(
+        dictionary=True
+    )
+
+    # Define the SELECT query.
     query = """
-    SELECT *
-    FROM transactions
-    WHERE transaction_id = %s
+        SELECT *
+        FROM transactions
+        WHERE transaction_id = %s
     """
 
-    cursor.execute(query, (transaction_id,))
+    # Execute the query.
+    cursor.execute(
+        query,
+        (transaction_id,)
+    )
+
+    # Get the transaction, or None if it does not exist.
     transaction = cursor.fetchone()
 
+    # Close database resources.
     cursor.close()
     connection.close()
 
+    # Return the transaction.
     return transaction
 
-# Retrieve all transactions and their predictions for a given source file.
-def get_batch_results_by_source_file(source_file):
-    """
-    Retrieve all transactions and their predictions
-    belonging to a previously uploaded CSV file.
+# ---------------------------------------------------------
+# GET BATCH RESULTS BY SOURCE FILE
+# ---------------------------------------------------------
 
-    This function only reads from MySQL.
-    It does NOT insert or modify anything.
-    """
+# Retrieve transactions and their latest predictions belonging to a previously uploaded CSV file.
+def get_batch_results_by_source_file(
+    source_file
+):
 
     # Open a database connection.
     connection = get_connection()
 
     # Use a dictionary cursor so column names are available.
-    cursor = connection.cursor(dictionary=True)
+    cursor = connection.cursor(
+        dictionary=True
+    )
 
-    # Get the latest prediction and investigation for each transaction.
+    # Retrieve the latest prediction and investigation
+    # for every transaction belonging to this CSV file.
     cursor.execute(
         """
         SELECT
@@ -375,7 +537,7 @@ def get_batch_results_by_source_file(source_file):
         (source_file,)
     )
 
-    # Get all matching transactions.
+    # Fetch all matching rows.
     rows = cursor.fetchall()
 
     # Close database resources.
@@ -401,6 +563,7 @@ def get_batch_results_by_source_file(source_file):
 
     for index, row in enumerate(rows):
 
+        # Add HIGH-risk transactions to the flagged list.
         if row["risk_level"] == "HIGH":
 
             flagged_transactions.append({
@@ -414,8 +577,7 @@ def get_batch_results_by_source_file(source_file):
                 "risk_level": row["risk_level"]
             })
 
-    # Return the same basic structure used by
-    # the batch prediction endpoint.
+    # Return the screening summary.
     return {
         "source_file": source_file,
         "total_transactions": len(rows),
@@ -424,12 +586,24 @@ def get_batch_results_by_source_file(source_file):
         "flagged_transactions": flagged_transactions
     }
 
-# Retrieve the prediction associated with a transaction.
-def get_prediction(transaction_id):
+# ---------------------------------------------------------
+# GET PREDICTION
+# ---------------------------------------------------------
 
+# Retrieve the latest prediction for a transaction.
+def get_prediction(
+    transaction_id
+):
+
+    # Open a database connection.
     connection = get_connection()
-    cursor = connection.cursor(dictionary=True)
 
+    # Use a dictionary cursor for named columns.
+    cursor = connection.cursor(
+        dictionary=True
+    )
+
+    # Retrieve the newest prediction for the transaction.
     cursor.execute(
         """
         SELECT *
@@ -444,17 +618,31 @@ def get_prediction(transaction_id):
     # Get the prediction, or None if it does not exist.
     prediction = cursor.fetchone()
 
+    # Close database resources.
     cursor.close()
     connection.close()
 
+    # Return the prediction.
     return prediction
 
-# Retrieve the latest investigation associated with a transaction.
-def get_investigation(transaction_id):
+# ---------------------------------------------------------
+# GET INVESTIGATION
+# ---------------------------------------------------------
 
+# Retrieve the latest investigation for a transaction.
+def get_investigation(
+    transaction_id
+):
+
+    # Open a database connection.
     connection = get_connection()
-    cursor = connection.cursor(dictionary=True)
 
+    # Use a dictionary cursor for named columns.
+    cursor = connection.cursor(
+        dictionary=True
+    )
+
+    # Retrieve the newest investigation.
     cursor.execute(
         """
         SELECT *
@@ -466,28 +654,46 @@ def get_investigation(transaction_id):
         (transaction_id,)
     )
 
+    # Get the investigation, or None if it does not exist.
     investigation = cursor.fetchone()
 
+    # Close database resources.
     cursor.close()
     connection.close()
 
+    # Return the investigation.
     return investigation
 
-# etrieve audit log entries from the database
+# ---------------------------------------------------------
+# GET AUDIT LOGS
+# ---------------------------------------------------------
+
+# Retrieve audit log entries from the database.
 def get_audit_logs():
 
+    # Open a database connection.
     connection = get_connection()
-    cursor = connection.cursor(dictionary=True)
 
-    cursor.execute("""
+    # Use a dictionary cursor for named columns.
+    cursor = connection.cursor(
+        dictionary=True
+    )
+
+    # Retrieve newest audit entries first.
+    cursor.execute(
+        """
         SELECT *
         FROM audit_logs
         ORDER BY timestamp DESC
-    """)
+        """
+    )
 
+    # Fetch all audit logs.
     logs = cursor.fetchall()
 
+    # Close database resources.
     cursor.close()
     connection.close()
 
+    # Return the audit logs.
     return logs

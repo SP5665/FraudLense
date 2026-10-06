@@ -1,6 +1,10 @@
-import streamlit as st
-import requests
 import pandas as pd
+import requests
+import streamlit as st
+
+# ---------------------------------------------------------
+# PAGE CONFIGURATION
+# ---------------------------------------------------------
 
 # Configure the Streamlit page.
 st.set_page_config(
@@ -15,19 +19,29 @@ API_URL = "http://127.0.0.1:8000"
 # Display the page title.
 st.title("🔎 Fraud Investigation")
 
+# ---------------------------------------------------------
+# SELECTED TRANSACTION
+# ---------------------------------------------------------
+
 # Get the transaction selected from the Dashboard.
-transaction_id = st.session_state.get("selected_transaction_id")
+transaction_id = st.session_state.get(
+    "selected_transaction_id"
+)
 
 # Stop if no transaction was selected.
 if transaction_id is None:
+
     st.warning(
         "No transaction selected. Please select a flagged transaction "
         "from the Screening Dashboard."
     )
+
     st.stop()
 
 # Display the selected transaction ID.
-st.subheader(f"Transaction #{transaction_id}")
+st.subheader(
+    f"Transaction #{transaction_id}"
+)
 
 # ---------------------------------------------------------
 # TRANSACTION DETAILS
@@ -40,10 +54,12 @@ response = requests.get(
 
 # Check whether the request was successful.
 if response.status_code != 200:
+
     st.error(
-        f"Failed to load transaction details. "
+        "Failed to load transaction details. "
         f"Status code: {response.status_code}"
     )
+
     st.stop()
 
 # Convert the API response into a Python dictionary.
@@ -51,8 +67,10 @@ result = response.json()
 
 # Display transaction information.
 st.header("Transaction Details")
-st.json(result["transaction"])
 
+st.json(
+    result["transaction"]
+)
 
 # ---------------------------------------------------------
 # MODEL PREDICTION
@@ -69,7 +87,9 @@ col1, col2 = st.columns(2)
 with col1:
 
     # Convert probability into a percentage for display.
-    probability = prediction["fraud_probability"] * 100
+    probability = (
+        prediction["fraud_probability"] * 100
+    )
 
     st.metric(
         "Fraud Probability",
@@ -84,7 +104,6 @@ with col2:
         prediction["risk_level"]
     )
 
-
 # ---------------------------------------------------------
 # SHAP EXPLANATION
 # ---------------------------------------------------------
@@ -98,11 +117,14 @@ shap_response = requests.get(
 
 # Check whether the SHAP request was successful.
 if shap_response.status_code != 200:
+
     st.error(
-        f"Failed to load SHAP explanation. "
+        "Failed to load SHAP explanation. "
         f"Status code: {shap_response.status_code}"
     )
+
 else:
+
     # Convert the API response into a Python dictionary.
     shap_result = shap_response.json()
 
@@ -110,11 +132,11 @@ else:
     explanation = shap_result["explanation"]
 
     st.write(
-        "These features had the strongest influence on the model's "
-        "fraud prediction."
+        "These features had the strongest influence on the "
+        "model's fraud prediction."
     )
 
-    # Prepare data for the SHAP table.
+    # Prepare data for the SHAP table and chart.
     shap_data = []
 
     for item in explanation:
@@ -146,10 +168,14 @@ else:
     st.divider()
 
     # Display the SHAP contribution chart.
-    st.subheader("📊 Feature Contribution")
+    st.subheader(
+        "📊 Feature Contribution"
+    )
 
-    # Create a DataFrame for the SHAP chart.
-    shap_chart_df = pd.DataFrame(shap_data)
+    # Convert the SHAP data into a DataFrame.
+    shap_chart_df = pd.DataFrame(
+        shap_data
+    )
 
     # Display the SHAP values as a bar chart.
     st.bar_chart(
@@ -158,11 +184,12 @@ else:
         y="SHAP Value"
     )
 
-    # Display a simple explanation below the table.
+    # Explain how to interpret SHAP values.
     st.info(
-        "Positive SHAP values push the model toward a fraud prediction, "
-        "while negative SHAP values push it away from fraud. "
-        "Larger absolute values indicate stronger influence."
+        "Positive SHAP values push the model toward a fraud "
+        "prediction, while negative SHAP values push it away "
+        "from fraud. Larger absolute values indicate stronger "
+        "influence."
     )
 
 # ---------------------------------------------------------
@@ -196,6 +223,7 @@ if investigation is not None:
 
 else:
 
+    # Inform the user when no investigation exists.
     st.info(
         "No investigation has been created for this transaction."
     )
@@ -204,66 +232,72 @@ else:
 # ANALYST DECISION
 # ---------------------------------------------------------
 
-st.subheader("👤 Analyst Decision")
+# Only display the decision form when an investigation exists.
+if investigation is not None:
 
-# Let the analyst choose the final decision.
-analyst_decision = st.radio(
-    "Decision",
-    ["FRAUD", "LEGITIMATE"],
-    horizontal=True
-)
-
-# Allow the analyst to enter optional notes.
-analyst_notes = st.text_area(
-    "Analyst Notes",
-    placeholder="Enter your investigation notes..."
-)
-
-# Submit the analyst's decision.
-if st.button("Submit Decision"):
-
-    # Send the decision to the FastAPI backend.
-    decision_response = requests.post(
-        f"{API_URL}/investigations/"
-        f"{investigation['investigation_id']}/decision",
-        json={
-            "analyst_decision": analyst_decision,
-            "analyst_notes": analyst_notes
-        }
+    st.subheader(
+        "👤 Analyst Decision"
     )
 
-    # Check whether the API request was successful.
-    if decision_response.status_code != 200:
+    # Let the analyst choose the final decision.
+    analyst_decision = st.radio(
+        "Decision",
+        ["FRAUD", "LEGITIMATE"],
+        horizontal=True
+    )
 
-        st.error(
-            f"Failed to submit decision. "
-            f"Status code: {decision_response.status_code}"
+    # Allow the analyst to enter notes.
+    analyst_notes = st.text_area(
+        "Analyst Notes",
+        placeholder="Enter your investigation notes..."
+    )
+
+    # Submit the analyst's decision.
+    if st.button("Submit Decision"):
+
+        # Send the decision to the FastAPI backend.
+        decision_response = requests.post(
+            f"{API_URL}/investigations/"
+            f"{investigation['investigation_id']}/decision",
+            json={
+                "analyst_decision": analyst_decision,
+                "analyst_notes": analyst_notes
+            }
         )
 
-    else:
+        # Check whether the API request was successful.
+        if decision_response.status_code != 200:
 
-        # Convert the API response into a Python dictionary.
-        decision_result = decision_response.json()
+            st.error(
+                "Failed to submit decision. "
+                f"Status code: {decision_response.status_code}"
+            )
 
-        # Display a success message.
-        st.success(
-            "Investigation decision submitted successfully."
-        )
+        else:
 
-        # Display the final decision.
-        st.write(
-            "**Decision:**",
-            decision_result["analyst_decision"]
-        )
+            # Convert the API response into a dictionary.
+            decision_result = decision_response.json()
 
-        # Display the final notes.
-        st.write(
-            "**Notes:**",
-            decision_result["analyst_notes"]
-        )
 
-        # Display the new investigation status.
-        st.write(
-            "**Status:**",
-            decision_result["status"]
-        )
+            # Display a success message.
+            st.success(
+                "Investigation decision submitted successfully."
+            )
+
+            # Display the final decision.
+            st.write(
+                "**Decision:**",
+                decision_result["analyst_decision"]
+            )
+
+            # Display the final notes.
+            st.write(
+                "**Notes:**",
+                decision_result["analyst_notes"]
+            )
+
+            # Display the new investigation status.
+            st.write(
+                "**Status:**",
+                decision_result["status"]
+            )

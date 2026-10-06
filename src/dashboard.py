@@ -1,9 +1,11 @@
 import os
-
 import pandas as pd
 import requests
 import streamlit as st
 
+# ---------------------------------------------------------
+# PAGE CONFIGURATION
+# ---------------------------------------------------------
 
 # Configure the Streamlit page.
 st.set_page_config(
@@ -12,18 +14,17 @@ st.set_page_config(
     layout="wide"
 )
 
-
 # FastAPI base URL.
 API_URL = "http://127.0.0.1:8000"
-
 
 # Folder where uploaded CSV files will be stored.
 UPLOAD_FOLDER = "uploads"
 
-
 # Create the uploads folder if it does not already exist.
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
+os.makedirs(
+    UPLOAD_FOLDER,
+    exist_ok=True
+)
 
 # Display the application title.
 st.title("🔍 FraudLense")
@@ -33,11 +34,11 @@ st.write(
     "and identify potentially fraudulent activity."
 )
 
-
 # ---------------------------------------------------------
 # REQUIRED MODEL FEATURES
 # ---------------------------------------------------------
 
+# These are the features expected by the trained model.
 required_columns = [
     "Time",
     "V1", "V2", "V3", "V4", "V5", "V6", "V7",
@@ -46,7 +47,6 @@ required_columns = [
     "V22", "V23", "V24", "V25", "V26", "V27", "V28",
     "Amount"
 ]
-
 
 # ---------------------------------------------------------
 # NEW CSV UPLOAD
@@ -59,29 +59,30 @@ st.write(
     "and store the results in MySQL."
 )
 
-
+# Allow the user to select a CSV file.
 uploaded_file = st.file_uploader(
     "Choose a CSV file",
     type=["csv"],
     key="new_csv"
 )
 
-
 if uploaded_file is not None:
 
     # Read the uploaded CSV so we can validate its columns.
-    transaction_df = pd.read_csv(uploaded_file)
+    transaction_df = pd.read_csv(
+        uploaded_file
+    )
 
-    # Check whether required columns are present.
+    # Check whether all required model columns are present.
     missing_columns = [
         column
         for column in required_columns
         if column not in transaction_df.columns
     ]
 
-    # Stop the upload if required columns are missing.
     if missing_columns:
 
+        # Stop the upload if required columns are missing.
         st.error(
             "Missing required columns: "
             + ", ".join(missing_columns)
@@ -95,15 +96,15 @@ if uploaded_file is not None:
             f"in `{uploaded_file.name}`."
         )
 
-        # Check whether this filename already exists.
+        # Create the local path for this uploaded CSV.
         file_path = os.path.join(
             UPLOAD_FOLDER,
             uploaded_file.name
         )
 
+        # Prevent the same filename from being uploaded again.
         if os.path.exists(file_path):
 
-            # Prevent accidentally inserting the same CSV again.
             st.warning(
                 f"`{uploaded_file.name}` has already been uploaded. "
                 "Select it from the existing CSV dropdown below "
@@ -112,7 +113,7 @@ if uploaded_file is not None:
 
         else:
 
-            # Only insert into MySQL when this button is clicked.
+            # Only start screening when the user clicks the button.
             if st.button(
                 "🚀 Upload & Screen New CSV",
                 key="screen_new_csv"
@@ -120,27 +121,34 @@ if uploaded_file is not None:
 
                 try:
 
+                    # Get the uploaded file contents once.
+                    file_contents = uploaded_file.getvalue()
+
                     # Save the CSV locally.
-                    with open(file_path, "wb") as file:
+                    with open(
+                        file_path,
+                        "wb"
+                    ) as file:
 
                         file.write(
-                            uploaded_file.getvalue()
+                            file_contents
                         )
 
-                    # Send the CSV to FastAPI for prediction
-                    # and database insertion.
+                    # Send the CSV to FastAPI.
+                    # FastAPI performs prediction and database insertion.
                     response = requests.post(
                         f"{API_URL}/predict/batch",
                         files={
                             "file": (
                                 uploaded_file.name,
-                                uploaded_file.getvalue(),
+                                file_contents,
                                 "text/csv"
                             )
                         },
                         data={
                             "source_file": uploaded_file.name
-                        }
+                        },
+                        timeout=120
                     )
 
                     # Check whether FastAPI succeeded.
@@ -151,27 +159,32 @@ if uploaded_file is not None:
                             f"Status code: {response.status_code}"
                         )
 
-                        # Remove the local file if the database
-                        # operation failed.
+                        # Remove the local file because the request failed.
                         if os.path.exists(file_path):
-                            os.remove(file_path)
+
+                            os.remove(
+                                file_path
+                            )
 
                     else:
 
-                        # Convert the API response to a dictionary.
+                        # Convert the API response into a dictionary.
                         result = response.json()
 
-                        # Store the result in Streamlit session state.
+                        # Store the screening result in session state.
                         st.session_state[
                             "screening_result"
                         ] = result
 
+                        # Store flagged transactions separately
+                        # for easy access by the dashboard.
                         st.session_state[
                             "flagged_transactions"
                         ] = result[
                             "flagged_transactions"
                         ]
 
+                        # Remember which CSV produced these results.
                         st.session_state[
                             "selected_source_file"
                         ] = uploaded_file.name
@@ -185,10 +198,17 @@ if uploaded_file is not None:
 
                 except requests.RequestException as error:
 
+                    # Handle connection and timeout errors.
                     st.error(
                         f"Could not connect to FastAPI: {error}"
                     )
 
+                    # Remove the local file if the request failed.
+                    if os.path.exists(file_path):
+
+                        os.remove(
+                            file_path
+                        )
 
 # ---------------------------------------------------------
 # EXISTING CSV FILES
@@ -205,16 +225,15 @@ uploaded_csvs = sorted(
     ]
 )
 
-
 if uploaded_csvs:
 
-    # Create a dropdown containing previously uploaded files.
+    # Create a dropdown containing previously uploaded CSV files.
     selected_csv = st.selectbox(
         "Select an existing CSV",
         uploaded_csvs
     )
 
-    # Load the selected CSV's already-stored results.
+    # Load results already stored in MySQL.
     if st.button(
         "📊 Load Existing Results",
         key="load_existing_results"
@@ -222,7 +241,6 @@ if uploaded_csvs:
 
         try:
 
-            # IMPORTANT:
             # This is a GET request.
             # It only reads existing database records.
             # It does NOT insert anything.
@@ -230,7 +248,8 @@ if uploaded_csvs:
                 f"{API_URL}/transactions/by-source",
                 params={
                     "source_file": selected_csv
-                }
+                },
+                timeout=30
             )
 
             # Check whether the API request succeeded.
@@ -257,6 +276,7 @@ if uploaded_csvs:
                     "flagged_transactions"
                 ]
 
+                # Remember which CSV is currently selected.
                 st.session_state[
                     "selected_source_file"
                 ] = selected_csv
@@ -267,30 +287,32 @@ if uploaded_csvs:
 
         except requests.RequestException as error:
 
+            # Handle connection and timeout errors.
             st.error(
                 f"Could not connect to FastAPI: {error}"
             )
 
 else:
 
+    # Inform the user when no CSV files have been uploaded yet.
     st.info(
         "No uploaded CSV files yet. "
         "Upload a new CSV above to begin."
     )
 
-
 # ---------------------------------------------------------
 # SCREENING RESULTS
 # ---------------------------------------------------------
 
+# Retrieve the current screening result from session state.
 result = st.session_state.get(
     "screening_result"
 )
 
+# Retrieve the flagged transactions from session state.
 flagged_transactions = st.session_state.get(
     "flagged_transactions"
 )
-
 
 if result is not None:
 
@@ -302,13 +324,20 @@ if result is not None:
     )
 
     if source_file:
+
         st.subheader(
             f"📄 Results: {source_file}"
         )
 
-    # Display screening summary.
-    st.subheader("Screening Summary")
+    # -----------------------------------------------------
+    # SCREENING SUMMARY
+    # -----------------------------------------------------
 
+    st.subheader(
+        "Screening Summary"
+    )
+
+    # Create three columns for the screening statistics.
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -332,14 +361,15 @@ if result is not None:
             result["low_risk_transactions"]
         )
 
-
     # -----------------------------------------------------
     # FLAGGED TRANSACTIONS
     # -----------------------------------------------------
 
     if flagged_transactions:
 
-        st.subheader("🚨 Flagged Transactions")
+        st.subheader(
+            "🚨 Flagged Transactions"
+        )
 
         # Convert flagged transactions into a DataFrame.
         flagged_df = pd.DataFrame(
@@ -352,7 +382,6 @@ if result is not None:
             use_container_width=True,
             hide_index=True
         )
-
 
         # -------------------------------------------------
         # INVESTIGATION
@@ -393,6 +422,7 @@ if result is not None:
 
     else:
 
+        # Display this when the screening found no HIGH-risk transactions.
         st.success(
             "No high-risk transactions were detected."
         )
